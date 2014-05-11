@@ -1,0 +1,12 @@
+#!/usr/bin/env zsh
+
+set -o errreturn
+set -o extendedglob
+set -o nounset
+#set -o xtrace
+
+declare -gxr ARBS=${0:a}
+
+source ${ARBS:h}/functions
+
+"$@"

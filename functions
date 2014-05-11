@@ -1,0 +1,324 @@
+# vim: ft=zsh sw=2 sts=2 et fdm=marker cms=\ #\ %s
+
+(( $+TOOLS )) || declare TOOLS=${0:a:h}
+
+function setup # {{{
+{
+  local -i zsh
+
+  local optname OPTARG OPTIND
+  while getopts z optname; do
+    case $optname in
+    z) zsh=1 ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  if (( zsh )); then
+    print -f 'path+=(%s);\n' -- ${ARBS:h}
+    print -f 'emulate zsh -o extendedglob -c "source %s/functions"\n' -- $TOOLS
+  else
+    print -f 'export PATH=$PATH:%s\n' -- ${ARBS:h}
+  fi
+} # }}}
+
+function run # {{{
+{
+  echo "${(q-)@}" >&2
+  "$@"
+} # }}}
+
+function print-section # {{{
+{
+  local -r s="${1?}" self=${MY_NAME?}
+  sed -rnf - ${MY_PATH?} <<EOSED
+    /^### $s \{\{\{/,/^### $s \}\}\}/ {
+      s:\\\$0:$self:
+      s:^#( |$)::p
+    }
+EOSED
+} # }}}
+
+function cleanup # {{{
+{
+  local rv=${1?}; shift
+  "$@"
+  return $rv
+} # }}}
+
+function filter # {{{
+{
+  local pred=: func=print
+
+  local optname OPTARG OPTIND
+  while getopts t:g: optname; do
+    case $optname in
+    t) pred=$OPTARG ;;
+    g) func=$OPTARG ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  (( $# == 0 )) && set -- -
+  local line
+  if [[ ${pred:0:2} == '[[' ]]; then
+    while (( ${+1} )); do
+      while read line; do
+        if () ( eval ${=pred} ) ${(q-)${=line}}; then
+          $func "$line"
+        fi
+      done < ${1/#%-/\/dev\/stdin}
+      shift
+    done
+  else
+    while (( ${+1} )); do
+      while read line; do
+        if eval ${=pred} ${(q-)${=line}}; then
+          $func "$line"
+        fi
+      done < ${1/#%-/\/dev\/stdin}
+      shift
+    done
+  fi
+} # }}}
+
+function in-dir # {{{
+{
+  local cmd dir
+
+  local optname OPTARG OPTIND
+  while getopts c: optname; do
+    case $optname in
+    c) cmd="$OPTARG" ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  dir=${1:?}; shift
+  [[ -z $cmd ]] && { cmd=${1:?}; shift }
+
+  local -r owd=$PWD
+  cd $dir
+  { eval "$cmd $*" } always { cd $owd }
+} # }}}
+
+function update-exclude # {{{
+{
+  local -r pkg=${${1:?}%/trunk/#}
+  local -a paths
+  paths=($(list-sources -b $pkg/trunk))
+  print -l /$pkg/trunk/${^paths} > .git/info/exclude-$pkg
+} # }}}
+
+function osc-config # {{{
+# roman@wrench > osc config general apiurl
+# 'general': 'apiurl' is set to 'https://api.opensuse.org'
+{
+  local ans into
+
+  local optname OPTARG OPTIND
+  while getopts r: optname; do
+    case $optname in
+    r) into=$OPTARG ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  ans="$(osc config "$@")"
+  ans=${${ans%\'}##*\'}
+  if [[ -z $into ]]; then
+    print -- "$ans"
+  else
+    : ${(P)into::=$ans}
+  fi
+} # }}}
+
+function load-obs-credentials # {{{
+{
+  declare -g BSAPIURL BSAPICREDS
+  [[ -n $BSAPIURL ]] && return
+
+  local bsuser bspass
+  osc-config -r BSAPIURL general apiurl
+  osc-config -r bsuser $BSAPIURL user
+  osc-config -r bspass $BSAPIURL pass
+  BSAPICREDS=$bsuser:$bspass
+} # }}}
+
+function download # {{{
+{
+  local -r lpath=${1:?} url=${2:?}
+  if [[ -e $lpath ]]; then
+    return
+  fi
+  {
+    run curl -SsfLC - -o $lpath $url
+  } always {
+    local -i rv=$?
+    if (( rv != 33 )); then
+      return $rv
+    fi
+    run curl -SsfL -o $lpath $url
+  }
+} # }}}
+
+function list-sources # {{{
+{
+  $TOOLS/list-sources "$@"
+} # }}}
+
+function fetch-remote-sources # {{{
+{
+  local -r pkg=${1:?}
+  list-sources -rbu $pkg \
+  | while read lpath url; do
+    download $pkg/$lpath $url
+  done
+} # }}}
+
+function update-sources # {{{
+{
+  local mode=update
+
+  local optname OPTARG OPTIND
+  while getopts c optname; do
+    case $optname in
+    c) mode=create ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  local -r pkg=${1:?}
+  local -a old new
+  [[ $mode == create ]] \
+    || old=($(list-sources -lrb $pkg/.osc))
+  new=($(list-sources -lrb $pkg))
+  (( ${#old:|new} )) && run osc rm -f $pkg/${^old:|new}
+  fetch-remote-sources $pkg
+  (( ${#new:|old} )) && run osc add $pkg/${^new:|old}
+} # }}}
+
+function create-obs-packages # {{{
+{
+  local obs=${${1:?}:a}; shift
+  local prj="$(cat $obs/.osc/_project)"
+  local pkg
+  for pkg in "$@"; do
+    create-obs-package -P $prj $obs $pkg
+  done
+} # }}}
+
+function create-obs-package # {{{
+{
+  local git=$PWD prj
+
+  local optname OPTARG OPTIND
+  while getopts P: optname; do
+    case $optname in
+    P) prj=$OPTARG ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  local osc=${1:?} pkg=${2:?}
+
+  [[ -z $prj ]] && prj="$(cat $osc/.osc/_project)"
+
+  run cd $osc
+  obs-create-package $prj $pkg
+  run osc co $pkg
+
+  run cd $git
+  obs-update-package -c $osc $pkg
+} # }}}
+
+function update-obs-packages # {{{
+{
+  local obs=${${1:?}:a}; shift
+  local pkg
+  for pkg in "$@"; do
+    obs-update-package $obs $pkg
+  done
+} # }}}
+
+function obs-update-package # {{{
+{
+  local us_c
+
+  local optname OPTARG OPTIND
+  while getopts c optname; do
+    case $optname in
+    c) us_c=-c ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  local -r obs=${1:?} pkg=${${2:?}%/trunk/#}
+  run overlay $obs/$pkg/.osc
+  {
+    update-sources ${us_c} $pkg/trunk
+    obs-commit-package ${us_c} $pkg/trunk
+    in-dir $obs/$pkg osc revert .
+  } always {
+    run overlay -d $pkg/trunk/.osc
+  }
+} # }}}
+
+function remove-obs-packages # {{{
+{
+  local osc=${1:?}; shift
+  local pkg
+  for pkg in "$@"; do
+    remove-obs-package $osc/$pkg
+  done
+} # }}}
+
+function remove-obs-package # {{{
+{
+  local pkg=${1:?}
+  cd $pkg
+  {
+    osc di > ../.diff-${pkg:t}
+    run osc revert .
+    run osc rm .
+  } always {
+    cd -
+    osc ci -m 'dropped from community.git' $pkg
+  }
+} # }}}
+
+function obs-commit-package # {{{
+{
+  local verb=update
+
+  local optname OPTARG OPTIND
+  while getopts c optname; do
+    case $optname in
+    c) verb=create ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  local -r pkg=${${1:?}%/trunk/#}/trunk
+  run osc addremove $pkg
+  run osc ci -m "${pkg%/trunk}: ${verb}d from community.git/$pkg" $pkg
+} # }}}
+
+function obs-create-package # {{{
+{
+  local prj=${1:?} pkg=${2:?}
+
+  load-obs-credentials
+
+  local url=$BSAPIURL/source/$prj/$pkg/_meta
+  curl -SsX PUT -T - -u $BSAPICREDS $url >/dev/null <<XML
+    <package name="$pkg" project="$prj">
+      <title/>
+      <description/>
+    </package>
+XML
+} # }}}
+
+function obs-build-package # {{{
+{
+  local -r pkg=${1:?}
+  {
+    run cd ${pkg%/trunk/#}/trunk
+    run osc build Arch_Extra x86_64 PKGBUILD
+  } always {
+    cd -
+  }
+} # }}}
+

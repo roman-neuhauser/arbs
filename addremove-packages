@@ -1,0 +1,98 @@
+#!/usr/bin/env zsh
+# vim: ft=zsh sw=2 sts=2 et fdm=marker cms=\ #\ %s
+
+### USAGE {{{
+# usage: $0 -h|--help
+#        $0 <oscroot>
+#        $PWD must be the topdir of a community.git clone
+### USAGE }}}
+
+set -o errreturn
+set -o extendedglob
+set -o nounset
+# set -o xtrace
+
+source ${0:h}/functions
+
+function main # {{{
+{
+  if [[ $# -eq 0 || $1 == (-h|--help) ]]; then
+    print-section USAGE
+    return 0
+  fi
+  local -r git="$(pwd)"
+  local -r osc=${1:?}
+
+  local -a gitpkgs; gitpkgs=($(print -l $git/*/trunk(:h:t)))
+  local -a oscpkgs; oscpkgs=($(print -l $osc/*/.osc(:h:t)))
+  local -a outgoing; outgoing=(${oscpkgs:|gitpkgs})
+  local -a incoming; incoming=(${gitpkgs:|oscpkgs})
+
+  # overview
+  package-list 'outgoing' $outgoing
+  package-list 'incoming' $incoming
+
+  # details
+  git-logs $git outgoing $outgoing
+  git-logs $git incoming $incoming
+
+  # actions
+  (( $#outgoing )) \
+    && prompt 'remove outgoing packages?' \
+    && remove-obs-packages $osc $outgoing
+  (( $#incoming )) \
+    && prompt 'create incoming packages?' \
+    && create-obs-packages $osc $incoming
+} # }}}
+
+function package-list # {{{
+{
+  local -r msg=${1:?}; shift
+  if [[ $# == 0 ]]; then
+    return
+  fi
+  print -f '%s:\n\n' -- $msg
+  print -f '  %s\n'  -- "$@"
+  print
+} # }}}
+
+function git-logs # {{{
+{
+  local -r git=${1:?} tag=${2:?}
+  shift 2
+
+  (( $# )) || return 0
+  prompt "details of $tag packages?\n" || return 0
+
+  print
+  {
+    cd $git
+    for d in "$@"; do
+      print -f '* %-16s' -- $d
+      git --no-pager log -1 --pretty=tformat:' %ad %h %an%n  %s' --date=short -- $d
+    done
+    print
+  } always {
+    cd -
+  }
+} # }}}
+
+function prompt # {{{
+{
+  local ans msg='continue?'
+  if [[ $# -gt 0 ]]; then
+    msg="$*"
+  fi
+  print $msg
+  read -rsk1 ans
+  if [[ $ans == [nN] ]]; then
+    return 1
+  fi
+  print
+} # }}}
+
+if [[ $#zsh_eval_context -eq 1 ]]; then
+  typeset MY_NAME=${0:t} MY_PATH=${0:a}
+  main "$@"
+  exit
+fi

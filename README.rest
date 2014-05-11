@@ -1,0 +1,73 @@
+.. vim: ft=rst sts=2 sw=2 tw=75
+.. default-role:: strong
+
+.. This file is marked up using reStructuredText.
+   Lines beginning with ".." are reST directives.
+   "foo_" or "`foo bar`_" is a link, defined at ".. _foo" or
+   ".. _foo bar".
+   "::" introduces a literal block (usually some form of code).
+   "`foo`" is some kind of identifier.
+   Suspicious backslashes in the text ("`std::string`\s") are required
+   for reST to recognize the preceding character as syntax.
+
+.. parsed-literal::
+
+  `NAME`
+    `arbs` - Mirror an ArchLinux package repository in a Build Service
+
+  `SYNOPSIS`
+      `arbs` addremove-packages <osc>
+      `arbs` create-obs-package [-P <prj>] <osc> <pkg>
+      `arbs` create-obs-packages <osc> <pkg>...
+      `arbs` download <localpath> <url>
+      `arbs` fetch-remote-sources <pkg>
+      `arbs` filter -t <pred> -g <outp>
+      `arbs` in-dir [-c cmd] <dir> <arg>...
+      `arbs` list-sources [-blruv] <pkg>
+      `arbs` obs-build-package <pkg>
+      `arbs` obs-commit-package [-c] <pkg>
+      `arbs` obs-create-package <prj> <pkg>
+      `arbs` obs-update-package [-c] <osc> <pkg>
+      `arbs` osc-config <section> <option>
+      `arbs` overlay <oscp>/.osc | -d <gitp>/.osc
+      `arbs` remove-obs-package [<osc>] <pkg>...
+      `arbs` remove-obs-packages <osc> <pkg>...
+      `arbs` setup [-z]
+      `arbs` update-exclude <pkg>
+      `arbs` update-sources [-c] <pkg>
+
+  `DESCRIPTION`
+    `Introduction`
+      `arbs` is a tool for keeping an OBS_ project
+      in sync with an ArchLinux_ package repository.
+      More specifically, I use it to sync
+      `home:roman-neuhauser:arch-community`_ with `community.git`_,
+      a mirror of the actual svn repository underlying community_.
+
+      `arbs` expects a community.git clone and an osc checkout
+      of a corresponding OBS project.
+
+    `Conventions`
+      Most `arbs` subcommands assume that `$PWD` is the root
+      of a community.git working copy.
+
+      `Conventions used in the SYNOPSIS section`
+
+        * `<osc>` is a path to the osc project checkout
+        * `<pkg>` can be either *<p>*, *<p>/trunk*, or *<osc>/<p>*
+
+    `Setup`
+
+        eval "$(path/to/arbs setup [-z])"
+
+      Use -z to enable zsh-specific output which includes all
+      `arbs` subcommands into current shell as functions.
+
+.. _OBS: https://build.opensuse.org/
+.. _home:roman-neuhauser:arch-community:
+   https://build.opensuse.org/project/show/home:roman-neuhauser:arch-community
+.. _ArchLinux: https://www.archlinux.org/
+.. _community: https://www.archlinux.org/packages/
+.. _community.git:
+   https://projects.archlinux.org/git/svntogit/community.git
+

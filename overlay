@@ -1,0 +1,69 @@
+#!/usr/bin/env zsh
+# vim: ft=zsh sw=2 sts=2 et fdm=marker cms=\ #\ %s
+
+set -o errreturn
+set -o extendedglob
+set -o nounset
+#set -o xtrace
+
+declare TOOLS=${0:a:h}
+
+source $TOOLS/functions
+
+function main # {{{
+{
+  local -i unmount=0
+
+  local optname OPTARG OPTIND
+  while getopts d optname; do
+    case $optname in
+    d) unmount=1 ;;
+    esac
+  done; shift $((OPTIND - 1))
+
+  if (( unmount )); then
+    do-unmount "$1"
+  else
+    do-mount "$1"
+  fi
+} # }}}
+
+function is-mount # {{{
+{
+  filter -t '[[ $2 == */'$1' ]]' < /etc/mtab | read
+} # }}}
+
+function is-empty # {{{
+{
+  local -a d
+  d=(${1:?}(N/F))
+  (( $#d == 0 ))
+} # }}}
+
+function do-mount # {{{
+{
+  local -r src=${${1:?}%/.osc/#}/.osc
+  local -r dst=${${src%/.osc/#}:t}/trunk/.osc
+
+  if [[ ! -e $dst ]]; then
+    mkdir $dst
+  fi
+
+  if ! is-mount $dst; then
+    if ! is-empty $dst; then
+      printf "%s: garbage in %s\n" $0 $dst >&2
+      return 1
+    fi
+    sudo mount --bind $src $dst
+  fi
+} # }}}
+
+function do-unmount # {{{
+{
+  sudo umount ${${${1:?}%/.osc/#}%/trunk/#}/trunk/.osc
+} # }}}
+
+if [[ $#zsh_eval_context -eq 1 ]]; then
+  main "$@"
+  exit
+fi

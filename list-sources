@@ -1,0 +1,95 @@
+#!/usr/bin/zsh
+# vim: ft=zsh sw=2 sts=2 et fdm=marker cms=\ #\ %s
+
+set -o errreturn
+set -o extendedglob
+set -o nounset
+#set -o xtrace
+
+declare TOOLS=${0:a:h}
+
+source $TOOLS/functions
+
+function main # {{{
+{
+  local -i basenames=0 urls=0
+
+  local show_remotes show_locals show_vcs
+
+  local optname OPTARG OPTIND
+  while getopts blruv optname; do
+  case "$optname" in
+    b) : ${basenames::=1} ${urls:=0} ;;
+    l) : ${show_locals::=1} ${show_remotes:=0} ${show_vcs:=0} ;;
+    r) : ${show_remotes::=1} ${show_locals:=0} ${show_vcs:=0} ;;
+    u) : ${urls::=1} ${basenames:=0} ;;
+    v) : ${show_vcs::=1} ${show_locals:=0} ${show_remotes:=0} ;;
+  esac
+  done; shift $((OPTIND - 1))
+
+  : ${show_locals:=1} ${show_remotes:=1} ${show_vcs:=1}
+
+  local -r list_sources_bash=$TOOLS/list-sources.bash
+
+  local pkgbuild=${1:?}
+  if [[ -f $1/trunk/PKGBUILD ]]; then
+    pkgbuild=$1/trunk/PKGBUILD
+  elif [[ -f $1/PKGBUILD ]]; then
+    pkgbuild=$1/PKGBUILD
+  fi
+  [[ -f $pkgbuild && -r $pkgbuild ]]
+  $list_sources_bash $pkgbuild | limit-output | sort
+} # }}}
+
+function limit-output # {{{
+{
+  filter -t requested -g output
+} # }}}
+
+function requested # {{{
+{
+  local -i rv_local=1 rv_remote=1 rv_vcs=1
+
+  (( show_locals )) && rv_local=0
+  (( show_remotes )) && rv_remote=0
+  (( show_vcs )) && rv_vcs=0
+
+  local -r src="${1:?}"
+  local -r lhs="${src%%::*}"
+  local -r rhs="${src#*::}"
+
+  [[ $rhs =~ '^(bzr|cvs|git|hg|svn)\>.*' ]] && return $rv_vcs
+  [[ $rhs =~ '://' ]] && return $rv_remote
+  return $rv_local
+} # }}}
+
+function output # {{{
+{
+  (( basenames || urls )) || {
+    echo "$@"
+    return
+  }
+
+  local -r src=${1:?}
+  case "$src" in
+  (*::*)
+    local -r b="${src%%::*}"
+    local -r u="${src#*::}"
+  ;;
+  (*)
+    local -r b="${src##*/}"
+    local -r u="$src"
+  ;;
+  esac
+  (( basenames )) && {
+    printf "%s" "$b"
+    (( urls )) && printf " "
+  }
+  (( urls )) && printf "%s" "$u"
+  printf "\n"
+} # }}}
+
+if [[ $#zsh_eval_context -eq 1 ]]; then
+  main "$@"
+fi
+
