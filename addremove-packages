@@ -23,8 +23,8 @@ function main # {{{
   local -r git="$(pwd)"
   local -r osc=${1:?}
 
-  local -a gitpkgs; gitpkgs=($(print -l $git/*/trunk(:h:t)))
-  local -a oscpkgs; oscpkgs=($(print -l $osc/*/.osc(:h:t)))
+  local -a gitpkgs; gitpkgs=($git/*/trunk(:h:t))
+  local -a oscpkgs; oscpkgs=($osc/*/.osc(:h:t))
   local -a outgoing; outgoing=(${oscpkgs:|gitpkgs})
   local -a incoming; incoming=(${gitpkgs:|oscpkgs})
 
