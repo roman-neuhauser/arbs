@@ -1,4 +1,4 @@
-#!/usr/bin/zsh
+#!/usr/bin/env zsh
 # vim: ft=zsh sw=2 sts=2 et fdm=marker cms=\ #\ %s
 
 set -o errreturn
