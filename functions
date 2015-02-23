@@ -199,7 +199,7 @@ function create-obs-packages # {{{
   local prj="$(cat $obs/.osc/_project)"
   local pkg
   for pkg in "$@"; do
-    create-obs-package -P $prj $obs $pkg
+    create-obs-package -P $prj $obs $pkg || :
   done
 } # }}}
 
