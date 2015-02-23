@@ -96,7 +96,7 @@ function in-dir # {{{
 
   local -r owd=$PWD
   cd $dir
-  { eval "$cmd $*" } always { cd $owd }
+  { $cmd "$@" } always { cd $owd }
 } # }}}
 
 function update-exclude # {{{
